@@ -56,9 +56,9 @@ interface DashboardContextType {
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
-// Live Published Google Sheet CSV URL (with public CORS access)
+// Live Google Sheet CSV URL (with public CORS access)
 const LIVE_SHEET_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vS5irLIO4XFmCmhox8g73N_V8sTjzFwyWDU6EcT0It-TrFQcaUULs-8tFDVz4B-Jr2Rrsh4q-gGVdcp/pub?gid=1870945839&single=true&output=csv';
+  'https://docs.google.com/spreadsheets/d/123oNDUuQsTTd64McpKgTaGUG4NGjL953ooZYbyx1ymA/export?format=csv&gid=1870945839';
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [records, setRecords] = useState<LoginRecord[]>(() => {
@@ -171,36 +171,38 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       setIsSyncing(true);
       const res = await fetch(`${LIVE_SHEET_URL}&t=${Date.now()}`);
-      if (res.ok) {
-        const csvText = await res.text();
-        const parsed = parseCSVToRecords(csvText);
+      if (!res.ok) {
+        throw new Error(`Google Sheets responded with status ${res.status}`);
+      }
 
-        if (parsed.length > 0) {
-          let didUpdate = false;
-          let previousLength = 0;
+      const csvText = await res.text();
+      const parsed = parseCSVToRecords(csvText);
 
-          setRecords((prevRecords) => {
-            previousLength = prevRecords.length;
-            if (!hasRecordChanges(parsed, prevRecords)) {
-              return prevRecords;
-            }
+      if (parsed.length > 0) {
+        let didUpdate = false;
+        let previousLength = 0;
 
-            didUpdate = true;
-            try {
-              localStorage.setItem('librawatch_stored_records', JSON.stringify(parsed));
-            } catch {}
-            return parsed;
-          });
-
-          if (didUpdate) {
-            const delta = parsed.length - previousLength;
-            setLastModifiedTimestamp(Date.now());
-            addToast(
-              'Live Google Sheet Synced',
-              `Fetched ${parsed.length} total records (${delta > 0 ? `+${delta}` : delta} new).`,
-              'info'
-            );
+        setRecords((prevRecords) => {
+          previousLength = prevRecords.length;
+          if (!hasRecordChanges(parsed, prevRecords)) {
+            return prevRecords;
           }
+
+          didUpdate = true;
+          try {
+            localStorage.setItem('librawatch_stored_records', JSON.stringify(parsed));
+          } catch {}
+          return parsed;
+        });
+
+        if (didUpdate) {
+          const delta = parsed.length - previousLength;
+          setLastModifiedTimestamp(Date.now());
+          addToast(
+            'Live Google Sheet Synced',
+            `Fetched ${parsed.length} total records (${delta > 0 ? `+${delta}` : delta} new).`,
+            'info'
+          );
         }
       }
       setLastSyncTime(new Date());
