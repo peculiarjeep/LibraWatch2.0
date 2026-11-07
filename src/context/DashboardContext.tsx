@@ -7,7 +7,6 @@ import {
   WatchlistStudent,
   StudentSecurityStatus,
 } from '../types/dashboard';
-import { INITIAL_LOG_RECORDS } from '../data/initialLogs';
 import {
   calculateMetrics,
   calculateDayVolumes,
@@ -15,6 +14,8 @@ import {
   buildWatchlist,
   parseCSVToRecords,
 } from '../utils/dashboardCalculations';
+
+const INITIAL_LOG_RECORDS: LoginRecord[] = [];
 
 export type TabKey = 'overview' | 'login-log' | 'students' | 'watchlist' | 'analytics' | 'settings';
 
@@ -93,6 +94,14 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     Array<{ id: string; title: string; message: string; type: 'info' | 'warning' | 'critical' }>
   >([]);
 
+  const hasRecordChanges = useCallback((nextRecords: LoginRecord[], previousRecords: LoginRecord[]) => {
+    if (nextRecords.length !== previousRecords.length) {
+      return true;
+    }
+
+    return nextRecords.some((record, index) => JSON.stringify(record) !== JSON.stringify(previousRecords[index]));
+  }, []);
+
   const metrics = useMemo(() => calculateMetrics(records, studentOverrides), [records, studentOverrides]);
   const dayVolumes = useMemo(() => calculateDayVolumes(records), [records]);
   const deviceStats = useMemo(() => calculateDeviceStats(records), [records]);
@@ -165,17 +174,33 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (res.ok) {
         const csvText = await res.text();
         const parsed = parseCSVToRecords(csvText);
-        if (parsed.length > 0 && parsed.length !== records.length) {
-          const delta = parsed.length - records.length;
-          setRecords(parsed);
-          try {
-            localStorage.setItem('librawatch_stored_records', JSON.stringify(parsed));
-          } catch {}
-          addToast(
-            'Live Google Sheet Synced',
-            `Fetched ${parsed.length} total records (${delta > 0 ? `+${delta}` : delta} new).`,
-            'info'
-          );
+
+        if (parsed.length > 0) {
+          let didUpdate = false;
+          let previousLength = 0;
+
+          setRecords((prevRecords) => {
+            previousLength = prevRecords.length;
+            if (!hasRecordChanges(parsed, prevRecords)) {
+              return prevRecords;
+            }
+
+            didUpdate = true;
+            try {
+              localStorage.setItem('librawatch_stored_records', JSON.stringify(parsed));
+            } catch {}
+            return parsed;
+          });
+
+          if (didUpdate) {
+            const delta = parsed.length - previousLength;
+            setLastModifiedTimestamp(Date.now());
+            addToast(
+              'Live Google Sheet Synced',
+              `Fetched ${parsed.length} total records (${delta > 0 ? `+${delta}` : delta} new).`,
+              'info'
+            );
+          }
         }
       }
       setLastSyncTime(new Date());
@@ -185,7 +210,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setIsSyncing(false);
     }
-  }, [records.length, addToast]);
+  }, [addToast, hasRecordChanges]);
 
   const appendSheetRows = useCallback(
     async (newRowsCSV: string): Promise<{ success: boolean; error?: string }> => {
@@ -197,15 +222,23 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           throw new Error('No valid rows parsed.');
         }
 
+        let didUpdate = false;
         setRecords((prev) => {
           const updated = [...prev, ...parsed];
-          try {
-            localStorage.setItem('librawatch_stored_records', JSON.stringify(updated));
-          } catch {}
-          return updated;
+          if (hasRecordChanges(updated, prev)) {
+            didUpdate = true;
+            try {
+              localStorage.setItem('librawatch_stored_records', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          }
+          return prev;
         });
 
-        addToast('Data Appended', `Added ${parsed.length} row(s) to dashboard.`, 'info');
+        if (didUpdate) {
+          setLastModifiedTimestamp(Date.now());
+          addToast('Data Appended', `Added ${parsed.length} row(s) to dashboard.`, 'info');
+        }
         return { success: true };
       } catch (err: any) {
         return { success: false, error: err.message };
@@ -213,7 +246,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsSyncing(false);
       }
     },
-    [addToast]
+    [addToast, hasRecordChanges]
   );
 
   const syncFromCSV = useCallback(
@@ -225,12 +258,22 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           throw new Error('No valid records found.');
         }
 
-        setRecords(parsed);
-        try {
-          localStorage.setItem('librawatch_stored_records', JSON.stringify(parsed));
-        } catch {}
+        let didUpdate = false;
+        setRecords((prev) => {
+          if (!hasRecordChanges(parsed, prev)) {
+            return prev;
+          }
+          didUpdate = true;
+          try {
+            localStorage.setItem('librawatch_stored_records', JSON.stringify(parsed));
+          } catch {}
+          return parsed;
+        });
 
-        addToast('DataSheet Synced', `Loaded ${parsed.length} records.`, 'info');
+        if (didUpdate) {
+          setLastModifiedTimestamp(Date.now());
+          addToast('DataSheet Synced', `Loaded ${parsed.length} records.`, 'info');
+        }
         return { success: true };
       } catch (err: any) {
         return { success: false, error: err.message };
@@ -238,7 +281,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsSyncing(false);
       }
     },
-    [addToast]
+    [addToast, hasRecordChanges]
   );
 
   const syncFromGoogleSheetUrl = useCallback(
@@ -270,9 +313,17 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       localStorage.removeItem('librawatch_stored_records');
     } catch {}
-    setRecords(INITIAL_LOG_RECORDS);
+
+    setRecords((prev) => {
+      if (!hasRecordChanges(INITIAL_LOG_RECORDS, prev)) {
+        return prev;
+      }
+      return INITIAL_LOG_RECORDS;
+    });
+
+    setLastModifiedTimestamp(Date.now());
     addToast('Data Reloaded', 'Re-synchronized dashboard with initial dataset.', 'info');
-  }, [addToast]);
+  }, [addToast, hasRecordChanges]);
 
   useEffect(() => {
     pollNow();
