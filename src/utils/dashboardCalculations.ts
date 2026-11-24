@@ -267,6 +267,121 @@ export function calculateDeviceStats(records: LoginRecord[]): DeviceStat[] {
   });
 }
 
+function logGamma(value: number): number {
+  const coefficients = [
+    676.5203681218851,
+    -1259.1392167224028,
+    771.3234287776531,
+    -176.61502916214059,
+    12.507343278686905,
+    -0.13857109526572012,
+    9.9843695780195716e-6,
+    1.5056327351493116e-7,
+  ];
+
+  if (value < 0.5) {
+    return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * value)) - logGamma(1 - value);
+  }
+
+  const shifted = value - 1;
+  let series = 0.9999999999998099;
+  for (let i = 0; i < coefficients.length; i++) {
+    series += coefficients[i] / (shifted + i + 1);
+  }
+  const base = shifted + coefficients.length - 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(base) - base + Math.log(series);
+}
+
+function chiSquareSurvival(statistic: number, degreesOfFreedom: number): number {
+  if (statistic <= 0) return 1;
+  if (degreesOfFreedom <= 0) return 1;
+
+  const shape = degreesOfFreedom / 2;
+  const x = statistic / 2;
+  const epsilon = 1e-12;
+  const maxIterations = 200;
+
+  let sum = 1 / shape;
+  let term = 1 / shape;
+  let ap = shape;
+  for (let i = 0; i < maxIterations; i++) {
+    ap += 1;
+    term *= x / ap;
+    sum += term;
+    if (Math.abs(term) < Math.abs(sum) * epsilon) break;
+  }
+  const lowerGamma = sum * Math.exp(-x + shape * Math.log(x) - logGamma(shape));
+  let probability = lowerGamma;
+
+  if (x >= shape + 1) {
+    let b = x + 1 - shape;
+    let c = 1 / 1e-30;
+    let d = 1 / b;
+    let h = d;
+    for (let i = 1; i <= maxIterations; i++) {
+      const an = -i * (i - shape);
+      b += 2;
+      d = an * d + b;
+      if (Math.abs(d) < 1e-30) d = 1e-30;
+      c = b + an / c;
+      if (Math.abs(c) < 1e-30) c = 1e-30;
+      d = 1 / d;
+      const delta = d * c;
+      h *= delta;
+      if (Math.abs(delta - 1) < epsilon) break;
+    }
+    const upperGamma = Math.exp(-x + shape * Math.log(x) - logGamma(shape)) * h;
+    probability = upperGamma;
+  } else {
+    probability = 1 - lowerGamma;
+  }
+
+  return Math.min(1, Math.max(0, probability));
+}
+
+export function calculateDeviceChiSquare(records: LoginRecord[]): {
+  statistic: number;
+  degreesOfFreedom: number;
+  pValue: number;
+} {
+  const devices: DeviceType[] = ['Desktop', 'Tablet', 'Mobile', 'Laptop'];
+  const activeDevices = devices.filter((device) =>
+    records.some((record) => record.device === device)
+  );
+
+  const successes = activeDevices.map(
+    (device) => records.filter((record) => record.device === device && record.result === 'Success').length
+  );
+  const failures = activeDevices.map(
+    (device) => records.filter((record) => record.device === device && record.result === 'Failed').length
+  );
+  const totals = activeDevices.map((_, index) => successes[index] + failures[index]);
+  const totalSuccesses = successes.reduce((sum, value) => sum + value, 0);
+  const totalFailures = failures.reduce((sum, value) => sum + value, 0);
+  const grandTotal = totalSuccesses + totalFailures;
+
+  let statistic = 0;
+  if (grandTotal > 0) {
+    totals.forEach((rowTotal, index) => {
+      const expectedSuccesses = (rowTotal * totalSuccesses) / grandTotal;
+      const expectedFailures = (rowTotal * totalFailures) / grandTotal;
+      if (expectedSuccesses > 0) {
+        statistic += (successes[index] - expectedSuccesses) ** 2 / expectedSuccesses;
+      }
+      if (expectedFailures > 0) {
+        statistic += (failures[index] - expectedFailures) ** 2 / expectedFailures;
+      }
+    });
+  }
+
+  const degreesOfFreedom = Math.max(1, activeDevices.length - 1);
+  return {
+    statistic,
+    degreesOfFreedom,
+    pValue: chiSquareSurvival(statistic, degreesOfFreedom),
+  };
+}
+
 export function parseCSVToRecords(csvText: string): LoginRecord[] {
   const lines = csvText
     .split('\n')

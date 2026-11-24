@@ -8,6 +8,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useDashboard } from '../context/DashboardContext';
+import { calculateDeviceChiSquare } from '../utils/dashboardCalculations';
 
 export const AnalyticsTab: React.FC = () => {
   const { records, deviceStats, metrics } = useDashboard();
@@ -48,10 +49,12 @@ export const AnalyticsTab: React.FC = () => {
       .sort((a, b) => b.failed / (b.total || 1) - a.failed / (a.total || 1))[0];
   }, [hourlyData]);
 
+  const chiSquare = useMemo(() => calculateDeviceChiSquare(records), [records]);
+
   return (
     <div className="space-y-6 pb-12">
       {/* Summary KPI Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center gap-2 text-indigo-600 mb-2">
             <Clock className="w-5 h-5" />
@@ -62,6 +65,20 @@ export const AnalyticsTab: React.FC = () => {
           </div>
           <p className="text-xs text-slate-400 mt-1">
             {peakHour?.total} logins recorded at this time
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+          <div className="flex items-center gap-2 text-violet-600 mb-2">
+            <Monitor className="w-5 h-5" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Device Chi-Square Test</span>
+          </div>
+          <div className="text-2xl font-black text-slate-900">
+            p = {chiSquare.pValue < 0.0001 ? '<0.0001' : chiSquare.pValue.toFixed(4)}
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            χ² = {chiSquare.statistic.toFixed(3)} · df = {chiSquare.degreesOfFreedom} ·{' '}
+            {chiSquare.pValue < 0.05 ? 'significant' : 'not significant'} at α = 0.05
           </p>
         </div>
 

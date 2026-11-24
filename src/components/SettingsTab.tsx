@@ -87,7 +87,7 @@ export const SettingsTab: React.FC = () => {
               >
                 <option value={1}>1 failure (High sensitivity)</option>
                 <option value={2}>2 failures</option>
-                <option value={3}>3 failures (Default - teacher example)</option>
+                <option value={3}>3 failures (Default)</option>
                 <option value={5}>5 failures (Relaxed)</option>
               </select>
             </div>
@@ -101,7 +101,7 @@ export const SettingsTab: React.FC = () => {
                 onChange={(e) => setRapidWindowMinutes(Number(e.target.value))}
                 className="w-full text-xs bg-slate-50 border border-slate-200 text-slate-800 font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-400"
               >
-                <option value={5}>5 minutes (Default - teacher example)</option>
+                <option value={5}>5 minutes (Default)</option>
                 <option value={10}>10 minutes</option>
                 <option value={15}>15 minutes (Broad cluster window)</option>
               </select>
