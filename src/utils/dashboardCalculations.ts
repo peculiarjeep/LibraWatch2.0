@@ -7,6 +7,7 @@ import {
   SeverityLevel,
   StudentSecurityStatus,
   DeviceType,
+  WatchlistSettings,
 } from '../types/dashboard';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -21,7 +22,8 @@ export function formatDisplayDate(dateStr: string): string {
 
 export function calculateMetrics(
   records: LoginRecord[],
-  studentOverrides: Record<string, StudentSecurityStatus> = {}
+  studentOverrides: Record<string, StudentSecurityStatus> = {},
+  watchlistSettings: WatchlistSettings = { minFailuresThreshold: 3, rapidWindowMinutes: 5 }
 ): DashboardMetrics {
   const total = records.length;
   if (total === 0) {
@@ -68,7 +70,7 @@ export function calculateMetrics(
   const failureRate7DPrevious = prev7Records.length > 0 ? (prev7Failures / prev7Records.length) * 100 : 34.4;
   const failureRate7DDelta = failureRate7D - failureRate7DPrevious;
 
-  const watchlist = buildWatchlist(records, studentOverrides);
+  const watchlist = buildWatchlist(records, studentOverrides, {}, watchlistSettings);
   const uniqueStudents = new Set(records.map((r) => r.studentId));
 
   const criticalCount = watchlist.filter((s) => s.severity === 'critical' && s.securityStatus !== 'whitelisted').length;
@@ -98,7 +100,8 @@ export function calculateMetrics(
 export function buildWatchlist(
   records: LoginRecord[],
   studentOverrides: Record<string, StudentSecurityStatus> = {},
-  incidentNotes: Record<string, string> = {}
+  incidentNotes: Record<string, string> = {},
+  watchlistSettings: WatchlistSettings = { minFailuresThreshold: 3, rapidWindowMinutes: 5 }
 ): WatchlistStudent[] {
   const studentMap: Record<string, LoginRecord[]> = {};
   for (const record of records) {
@@ -122,36 +125,34 @@ export function buildWatchlist(
       return aTime.localeCompare(bTime);
     });
 
+    const failedAttemptsInWindow = sorted.filter((a) => a.result === 'Failed');
     let rapidAttempts = false;
-    for (let i = 0; i <= sorted.length - 3; i++) {
-      const t0 = new Date(`${sorted[i].date}T${sorted[i].timeIn}`).getTime();
-      const t2 = new Date(`${sorted[i + 2].date}T${sorted[i + 2].timeIn}`).getTime();
-      if (!isNaN(t0) && !isNaN(t2) && t2 - t0 <= 10 * 60 * 1000) {
+    const threshold = watchlistSettings.minFailuresThreshold;
+    const windowMilliseconds = watchlistSettings.rapidWindowMinutes * 60 * 1000;
+    for (let i = 0; i <= failedAttemptsInWindow.length - threshold; i++) {
+      const firstTime = new Date(`${failedAttemptsInWindow[i].date}T${failedAttemptsInWindow[i].timeIn}`).getTime();
+      const finalTime = new Date(
+        `${failedAttemptsInWindow[i + threshold - 1].date}T${failedAttemptsInWindow[i + threshold - 1].timeIn}`
+      ).getTime();
+      if (!isNaN(firstTime) && !isNaN(finalTime) && finalTime - firstTime <= windowMilliseconds) {
         rapidAttempts = true;
+        break;
       }
     }
 
     const flagReasons: string[] = [];
-    if (failedAttempts >= 2) {
-      flagReasons.push(`${failedAttempts} failed login attempts`);
-    }
     if (rapidAttempts) {
-      flagReasons.push('Rapid-fire attempts detected (3+ in < 10 mins)');
-    }
-    if (failedAttempts >= 5) {
-      flagReasons.push('High volume authentication failures');
+      flagReasons.push(
+        `${threshold}+ failed login attempts within ${watchlistSettings.rapidWindowMinutes} minutes`
+      );
     }
 
     let severity: SeverityLevel = 'warning';
-    if (failedAttempts >= 5 || rapidAttempts || totalAttempts >= 10) {
+    if (rapidAttempts) {
       severity = 'critical';
-    } else if (failedAttempts >= 3) {
-      severity = 'high';
-    } else if (failedAttempts >= 2) {
-      severity = 'warning';
     }
 
-    const isFlagged = failedAttempts >= 2 || rapidAttempts;
+    const isFlagged = rapidAttempts;
 
     if (isFlagged) {
       const lastAttempt = sorted[sorted.length - 1];

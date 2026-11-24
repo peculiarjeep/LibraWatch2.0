@@ -25,6 +25,7 @@ export const Sidebar: React.FC = () => {
     isSettingsUnlocked,
     pollNow,
     isSyncing,
+    watchlistSettings,
   } = useDashboard();
 
   const [syncModalOpen, setSyncModalOpen] = useState<boolean>(false);
@@ -148,7 +149,7 @@ export const Sidebar: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-slate-500 leading-snug">
-              Flagged at 2+ failed attempts, or 3 attempts within 10 min.
+              Flagged at {watchlistSettings.minFailuresThreshold}+ failed attempts within {watchlistSettings.rapidWindowMinutes} min.
             </p>
 
             <div className="space-y-1 pt-1 text-xs font-medium">

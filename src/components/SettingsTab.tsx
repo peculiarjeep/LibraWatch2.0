@@ -86,8 +86,8 @@ export const SettingsTab: React.FC = () => {
                 className="w-full text-xs bg-slate-50 border border-slate-200 text-slate-800 font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-400"
               >
                 <option value={1}>1 failure (High sensitivity)</option>
-                <option value={2}>2 failures (Default - LibraWatch standard)</option>
-                <option value={3}>3 failures (Moderate)</option>
+                <option value={2}>2 failures</option>
+                <option value={3}>3 failures (Default - teacher example)</option>
                 <option value={5}>5 failures (Relaxed)</option>
               </select>
             </div>
@@ -101,12 +101,15 @@ export const SettingsTab: React.FC = () => {
                 onChange={(e) => setRapidWindowMinutes(Number(e.target.value))}
                 className="w-full text-xs bg-slate-50 border border-slate-200 text-slate-800 font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-400"
               >
-                <option value={5}>5 minutes (Aggressive burst detection)</option>
-                <option value={10}>10 minutes (Standard library window)</option>
+                <option value={5}>5 minutes (Default - teacher example)</option>
+                <option value={10}>10 minutes</option>
                 <option value={15}>15 minutes (Broad cluster window)</option>
               </select>
             </div>
           </div>
+          <p className="text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            Active rule: a student is flagged when <strong className="text-slate-700">{minFailuresThreshold} failed login attempts</strong> occur within <strong className="text-slate-700">{rapidWindowMinutes} minutes</strong>.
+          </p>
         </div>
 
         {/* Section 2: Continuous DataSheet Monitor & Synchronization */}

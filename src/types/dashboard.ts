@@ -72,3 +72,8 @@ export interface DashboardMetrics {
   uniqueStudentsCount: number;
   dateRangeText: string;
 }
+
+export interface WatchlistSettings {
+  minFailuresThreshold: number;
+  rapidWindowMinutes: number;
+}

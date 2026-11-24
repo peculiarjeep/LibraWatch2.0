@@ -14,7 +14,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { DayVolume } from '../types/dashboard';
 
 export const OverviewTab: React.FC = () => {
-  const { metrics, dayVolumes, deviceStats, setActiveTab } = useDashboard();
+  const { metrics, dayVolumes, deviceStats, setActiveTab, watchlistSettings } = useDashboard();
   const [hoveredDay, setHoveredDay] = useState<DayVolume | null>(null);
 
   const maxVolume = Math.max(...dayVolumes.map((d) => d.total), 80);
@@ -41,7 +41,7 @@ export const OverviewTab: React.FC = () => {
           </p>
         </div>
         <div className="text-xs text-slate-400 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 self-start md:self-auto">
-          Watchlist rule: <span className="text-slate-600 font-semibold">2+ failures</span>, or <span className="text-slate-600 font-semibold">3 attempts within 10 min</span>
+          Watchlist rule: <span className="text-slate-600 font-semibold">{watchlistSettings.minFailuresThreshold}+ failures within {watchlistSettings.rapidWindowMinutes} min</span>
         </div>
       </div>
 

@@ -23,6 +23,7 @@ export const WatchlistTab: React.FC = () => {
     metrics,
     searchQuery,
     updateStudentStatus,
+    watchlistSettings,
   } = useDashboard();
 
   const [severityFilter, setSeverityFilter] = useState<'all' | SeverityLevel>('all');
@@ -93,10 +94,8 @@ export const WatchlistTab: React.FC = () => {
               {metrics.flaggedStudentsCount} Flagged Suspicious Students
             </h2>
             <p className="text-xs text-rose-200/90 max-w-xl">
-              Automatic rule: Flagged at <strong className="text-white">2+ failed attempts</strong> or{' '}
-              <strong className="text-white">3 attempts within 10 minutes</strong>. Student{' '}
-              <strong className="text-white underline decoration-rose-400">2026-9921</strong> has 13 consecutive failures
-              and triggered the critical rapid-fire brute-force threshold.
+              Active rule: a student is flagged when <strong className="text-white">{watchlistSettings.minFailuresThreshold}+ failed attempts</strong>{' '}
+              occur within <strong className="text-white">{watchlistSettings.rapidWindowMinutes} minutes</strong>.
             </p>
           </div>
 

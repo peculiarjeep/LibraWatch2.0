@@ -6,6 +6,7 @@ import {
   DeviceStat,
   WatchlistStudent,
   StudentSecurityStatus,
+  WatchlistSettings,
 } from '../types/dashboard';
 import {
   calculateMetrics,
@@ -52,6 +53,8 @@ interface DashboardContextType {
   lockSettings: () => void;
   recentToasts: Array<{ id: string; title: string; message: string; type: 'info' | 'warning' | 'critical' }>;
   dismissToast: (id: string) => void;
+  watchlistSettings: WatchlistSettings;
+  updateWatchlistSettings: (settings: WatchlistSettings) => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -93,6 +96,30 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [recentToasts, setRecentToasts] = useState<
     Array<{ id: string; title: string; message: string; type: 'info' | 'warning' | 'critical' }>
   >([]);
+  const [watchlistSettings, setWatchlistSettings] = useState<WatchlistSettings>(() => {
+    try {
+      const saved = localStorage.getItem('librawatch_watchlist_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          Number.isInteger(parsed.minFailuresThreshold) &&
+          parsed.minFailuresThreshold >= 1 &&
+          Number.isInteger(parsed.rapidWindowMinutes) &&
+          parsed.rapidWindowMinutes >= 1
+        ) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return { minFailuresThreshold: 3, rapidWindowMinutes: 5 };
+  });
+
+  const updateWatchlistSettings = useCallback((settings: WatchlistSettings) => {
+    setWatchlistSettings(settings);
+    try {
+      localStorage.setItem('librawatch_watchlist_settings', JSON.stringify(settings));
+    } catch {}
+  }, []);
 
   const hasRecordChanges = useCallback((nextRecords: LoginRecord[], previousRecords: LoginRecord[]) => {
     if (nextRecords.length !== previousRecords.length) {
@@ -102,12 +129,15 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return nextRecords.some((record, index) => JSON.stringify(record) !== JSON.stringify(previousRecords[index]));
   }, []);
 
-  const metrics = useMemo(() => calculateMetrics(records, studentOverrides), [records, studentOverrides]);
+  const metrics = useMemo(
+    () => calculateMetrics(records, studentOverrides, watchlistSettings),
+    [records, studentOverrides, watchlistSettings]
+  );
   const dayVolumes = useMemo(() => calculateDayVolumes(records), [records]);
   const deviceStats = useMemo(() => calculateDeviceStats(records), [records]);
   const watchlist = useMemo(
-    () => buildWatchlist(records, studentOverrides, incidentNotes),
-    [records, studentOverrides, incidentNotes]
+    () => buildWatchlist(records, studentOverrides, incidentNotes, watchlistSettings),
+    [records, studentOverrides, incidentNotes, watchlistSettings]
   );
 
   const selectedStudent = useMemo(() => {
@@ -370,6 +400,8 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         lockSettings,
         recentToasts,
         dismissToast,
+        watchlistSettings,
+        updateWatchlistSettings,
       }}
     >
       {children}
